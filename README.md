@@ -1,244 +1,358 @@
 # SafeKeys
 
-擦 Mac 键盘时，把键盘锁住；一个按钮锁，另一个按钮解。
+清洁 Mac 时锁定键盘，抹布蹭到的按键不会触发任何操作。鼠标和触控板照常可用。
 
-macOS 15.6 / Apple Silicon，纯 Swift + AppKit/SwiftUI，**不需要 Xcode**，无第三方依赖，无联网、无数据收集。
+<p align="center">
+  <b>锁定</b> → 擦键盘 → <b>解锁</b>，全程约 30 秒。
+</p>
+
+**English**: A small macOS utility that locks the keyboard (and only the keyboard) while you clean it.
+中文文档如下。
 
 ---
 
-## 快速开始
+## 目录
+
+- [一分钟上手](#一分钟上手)
+- [它能做什么](#它能做什么)
+- [安装](#安装)
+- [首次运行：授权辅助功能](#首次运行授权辅助功能)
+- [使用说明](#使用说明)
+- [原理](#原理)
+- [卸载](#卸载)
+- [从源码构建](#从源码构建)
+- [常见问题](#常见问题)
+- [项目结构](#项目结构)
+
+---
+
+## 一分钟上手
 
 ```bash
-cd SafeKeys
-./scripts/build-app.sh      # 编译并生成 dist/SafeKeys.app
+# 1. 解压后把 App 放进「应用程序」（Release 页面下载 zip）
+cp -R SafeKeys.app /Applications/
+
+# 2. 首次运行前，解除 macOS 对本地签名 App 的拦截
+xattr -dr com.apple.quarantine /Applications/SafeKeys.app
+
+# 3. 打开 → 按提示勾选「辅助功能」→ 退出重开
+open /Applications/SafeKeys.app
 ```
 
-然后把 `dist/SafeKeys.app` 拖到你想长期使用的位置（建议 `/Applications`）。
+之后每次使用：
 
-> ⚠️ **选定位置后就不要再移动它。** 本地未公证 app 用的是 ad-hoc 签名，
-> 换路径或重新签名会让 macOS 认为它是另一个程序，辅助功能授权随之失效，需要重新勾选。
+1. 打开 SafeKeys，点 **锁定键盘**
+2. 尽情擦拭 —— 期间任何按键都不会生效
+3. 按住浮层上的 **按住解锁** 按钮 0.8 秒解锁（不按也会在倒计时结束时自动解锁）
 
-### 首次打开
+> 记不住怎么解锁？口令就写在浮层上。**最坏情况下 `pkill -x SafeKeys` 一定能解锁。**
 
-macOS 会因为"无法验证开发者"拦一下，这是本地自签的必然结果：
+---
+
+## 它能做什么
+
+| 输入类型 | 锁定期间是否生效 |
+|---|---|
+| 字母数字符号、Enter、空格、Tab | ❌ 全部丢弃 |
+| Cmd+Tab / Cmd+Space / Cmd+Q / Ctrl+Cmd+Q / Cmd+Opt+Esc | ❌ 全部丢弃 |
+| Cmd / Shift / Option / Ctrl / CapsLock | ❌ 全部丢弃 |
+| F1–F12 亮度、音量、播放控制 | ❌ 全部丢弃 |
+| 中英文输入法切换与候选上屏 | ❌ 全部丢弃 |
+| 外接 USB / 蓝牙键盘 | ❌ 全部丢弃 |
+| **鼠标、触控板** | ✅ 保留（故意的，见下） |
+| Touch ID 按钮、电源键 | ⚠️ 无法拦截（由系统硬件层面处理） |
+
+**为什么不锁触控板**：留一条不依赖键盘的操作通道，这是安全设计。
+全锁死之后一旦软件出问题就真的叫天天不应了；保留鼠标意味着你永远能用按钮解锁。
+
+---
+
+## 安装
+
+### 方式一：下载编译好的 App（推荐）
+
+从 [Releases](https://github.com/Nothings2Seeyeyeye/SafeKeys/releases) 下载
+`SafeKeys-x.x.x.zip`，解压后把 `SafeKeys.app` 拖进「应用程序」。
+
+App 是 ad-hoc 自签名、未公证，首次打开需要：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/SafeKeys.app
 ```
 
-或者：访达里右键 → 打开 → 打开（只需一次）。
+若仍提示"无法验证开发者"，右键 App → 打开。
 
-### 授权（必须）
+### 方式二：从源码构建
 
-1. 打开 SafeKeys，如果主界面显示"需要辅助功能权限"，点 **去设置**
-2. 系统设置 → 隐私与安全性 → 辅助功能 → 勾选 SafeKeys
-3. **完全退出再重新打开 SafeKeys**（macOS 的 TCC 权限只在下次启动时生效）
+见 [从源码构建](#从源码构建)。
 
-授权后主界面状态灯变绿，锁定按钮才可用。这是刻意的：**没有权限就绝不进入锁定状态**，
-避免出现"以为锁了其实根本没锁"的静默失败。
+> ⚠️ **装到哪个位置就别再移动它**。macOS 的辅助功能授权按 App 路径记录，
+> 换路径会被当成另一个程序，授权随即失效。
 
 ---
 
-## 用法
+## 首次运行：授权辅助功能
 
-主窗口就两个按钮：
+这是唯一必须的一步，没有它 SafeKeys 什么都做不了。
 
-| 按钮 | 什么时候可用 |
-|---|---|
-| **锁定键盘** | 键盘正常时 | 
-| **解锁键盘** | 键盘被锁时 |
+1. 打开 App，主界面底部会显示 **需要辅助功能权限**
+2. 点 **去设置** → 在系统设置里勾选 SafeKeys
+3. **完全退出再重新打开 SafeKeys**（TCC 权限只在下次启动时生效）
 
-锁定后会出现一块覆盖全屏的浮层，上面有 **解锁键盘** 大按钮和倒计时。鼠标和触控板从头到尾不受影响。
+授权成功后界面显示绿色的 **辅助功能已授权**，**锁定键盘** 按钮变为可用。
 
-**三种解锁方式，任意一种都行：**
+未授权时按钮是灰的 —— 这是刻意的，避免出现"以为锁了其实根本没锁"的静默失败。
 
-1. **按住**浮层（或主窗口）上的「按住解锁」按钮 **0.8 秒**（有进度条）—— 单击无效，
-   这是为了防擦洗时蹭到触控板误解锁
-2. 敲**解锁口令** —— 默认连贯地连按 Esc 四次，口令提示就印在浮层上，不用记
-3. 等倒计时结束，默认 90 秒（可改：30 秒 / 60 秒 / 90 秒 / 2 分钟 / 不限时）
+**重置授权：**
 
-> 即使选了"不限时"，**10 分钟后也会强制解锁**。这是硬上限，改不了 —— 防止忘了自己在锁定状态。
-
-### 为什么解锁要设计得这么"麻烦"
-
-因为实际用起来最先出问题的不是解不开，而是**被意外解开**。所以口令加了四道约束，
-四条必须同时成立才放行：
-
-| 约束 | 挡掉什么 |
-|---|---|
-| 必须是**多个**按键 | 蹭到单个键就解锁 |
-| 相邻两次间隔在 **0.1–0.8 秒**之间 | 抹布划过去的连击、以及慢吞吞的零星触碰 |
-| 序列中途碰了**任何其他键**就重来 | 擦洗时总会有好几个键一起被蹭到；人照着提示敲口令时只会碰到口令里那几个 |
-| 按住不放产生的系统**重复事件**不计 | 手压在键上不动会被系统连续上报成多次按下 |
-| 另有锁定后 **2 秒冷却期** | 点完锁定、手还没离开键盘那一下的余波 |
-
-口令可以在主界面改，四种可选：
-
-| 选项 | 操作 | 适合谁 |
-|---|---|---|
-| **Esc ×4**（默认） | 连贯敲四下 Esc | 大多数人 |
-| **Tab·Esc 交替** | 依次 Tab → Esc → Tab → Esc | 想要更难误触 |
-| **⌘⌥U** | Cmd + Option + U | 习惯用组合键 |
-| **不用键盘** | 只能按按钮或等倒计时 | 完全不信任任何键盘输入 |
-
-> 这套判定规则的胜负手在于"错位即重来"。想知道它到底有没有算对，不必去按键：
-> 见文末的 `--selftest`。
+```bash
+tccutil reset Accessibility cn.open-book.SafeKeys
+```
 
 ---
 
-## 如果真的出问题了
+## 使用说明
 
-按可能性从高到低，**每一条都能让键盘立刻恢复**：
+### 主界面
 
-| 情况 | 怎么办 |
+| 区域 | 说明 |
 |---|---|
-| 按钮点不到 | 浮层层级高于普通窗口，不可能被盖住；口令仍然有效 |
-| 忘了怎么解锁 | 口令写死在浮层上，看得见就能解 |
-| App 崩溃 / 无响应 | `pkill -x SafeKeys` —— 事件拦截是进程资源，**进程一死键盘必然恢复** |
-| 强退也麻烦 | 活动监视器里搜 SafeKeys → 强制退出，效果同上 |
-| 主线程彻底死锁（极端情况） | 内置看门狗会在 3 秒无心跳后自行释放并退出，无需人工干预 |
-| 权限被取消 | 程序检测到后立即自动解锁 |
+| 状态灯 | 绿色 = 键盘正常，红色 = 已锁定 |
+| 锁定键盘 | 普通点击即生效，仅在未锁定且已授权时可用 |
+| 按住解锁 | 需按住 0.8 秒，仅锁定时可用。单击无效，防止擦洗时蹭到触控板误解锁 |
+| 自动解锁 | 30 秒 / 60 秒 / 90 秒 / 2 分钟 / 不限时 |
+| 解锁口令 | Esc ×4（默认）/ Tab·Esc 交替 / ⌘⌥U / 不用键盘 |
 
-**万能钥匙：`pkill -x SafeKeys`** —— 这一条记住就够。
+> **无论选多久，10 分钟一到强制解锁。** 这是改不掉的硬上限，防止忘了自己还在锁定状态。
+
+### 键盘快捷键
+
+| 快捷键 | 作用 |
+|---|---|
+| Cmd+Q | 退出 App（自动解锁） |
+| Cmd+W | 关闭窗口（自动解锁并退出） |
+| Cmd+M | 最小化 |
+| Cmd+C / Cmd+V | 复制粘贴 |
+
+### 四种解锁方式
+
+任选其一即可：
+
+| 方式 | 怎么用 |
+|---|---|
+| **按住解锁按钮 0.8 秒** | 浮层正中央，带进度条。蹭一下不会触发 |
+| **解锁口令** | 默认连贯地连按 Esc 四次，口令印在浮层上 |
+| **等倒计时** | 时间到自动解锁 |
+| **`pkill -x SafeKeys`** | 万能钥匙，任何时候都有效 |
 
 ---
 
 ## 原理
 
-### 怎么锁
+### 拦截发生在哪一层
 
-在系统 HID 事件层面插一个 `CGEventTap`，回调返回 `nil` 表示"事件已被消费"，事件就再也不会传
-到任何 App。掩码覆盖四类：
+macOS 的按键从键盘到应用要经过好几层。SafeKeys 用 `CGEventTap` 插在 **HID 事件层** ——
+用户输入抵达应用之前最早的用户态节点之一：
 
-- `keyDown` / `keyUp` — 普通按键
-- `flagsChanged` — Cmd / Shift / Option / Ctrl / CapsLock
-- `NX_SYSDEFINED`(14) — 亮度、音量、播放、部分功能键。不写这条，F1–F12 会漏
-
-注入点用 `kCGHIDEventTap`（枚举值 0），是最早的用户态拦截点。
-
-### 覆盖范围
-
-| 输入 | 锁定 |
-|---|---|
-| 字母数字符号、Enter、空格、Tab | ✅ |
-| Cmd+Tab / Cmd+Space / Cmd+Q / Cmd+Opt+Esc / Ctrl+Cmd+Q | ✅ |
-| Cmd / Shift / Option / Ctrl / CapsLock | ✅ |
-| F1–F12 亮度音量播放（含长按、连按） | ✅ |
-| 中英文输入法切换与候选上屏 | ✅ |
-| 外接 USB / 蓝牙键盘 | ✅ |
-| 鼠标、触控板、手势 | ❌ **保留** —— 这是解锁的物理保障 |
-| 电源键 / Touch ID | ❌ 硬件层，公开 API 拦不了 |
-
-### 怎么保证一定能解锁
-
-四条主路径互相独立，加上三条兜底：
-
-- 按住解锁按钮 0.8 秒（鼠标路径）
-- 解锁口令（键盘路径，可在设置里选 Esc ×4 / Tab·Esc 交替 / ⌘⌥U / 关闭）
-- 倒计时 + 10 分钟硬上限（时间路径）
-- **进程终止 = 解锁**（操作系统保证：tap 是进程资源）
-- 兜底 1：`atexit` + SIGINT/SIGTERM handler 抢占所有退出路径
-- 兜底 2：**独立 pthread 看门狗**，主线程卡死 3 秒即释放 tap 并退出
-- 兜底 3：权限被撤销、系统睡眠、锁屏、用户切换 → 自动解锁
-
-唯一真正灾难的场景是"进程活着但主线程卡死"，此时 UI 点不动、键盘也全废。
-看门狗线程不依赖 RunLoop，只盯着一个心跳时间戳，专门收拾这个场景。
-
----
-
-## 退出与资源占用
-
-**关闭窗口即退出进程。** 点红叉等同于 Cmd+Q：先解锁键盘、再释放一切后台设施、进程消失，
-不留任何常驻任务。App 的职责是"临时劫持键盘"，用完就该彻底安静。
-
-退出路径上做了三层收尾：
-
-| 时机 | 动作 |
-|---|---|
-| 关闭窗口 | `windowShouldClose` 先解锁 → `windowWillClose` 主动 `NSApp.terminate` |
-| `applicationWillTerminate` | 解锁 → 停止看门狗线程、invalidate Timer、移除通知观察者 |
-| `atexit` / SIGTERM / SIGINT | `KeyBlocker.emergencyRelease()` 兜底释放事件劫持 |
-
-空闲时的实测占用（Apple Silicon）：
-
-- **物理内存（footprint）约 27MB**，长时间驻留无增长
-- **RunLoop 唤醒约 4 次/秒**（0.5s 状态轮询 + 看门狗心跳），不存在高频轮询
-
-> 早期版本给解锁按钮挂了一个常驻 30Hz 计时器，导致 App 什么都不做也每秒被唤醒 30 次。
-> 已改为**只在按住按钮期间**才创建计时器。
-
-想自己复核占用，可以用随包的测量脚本（沙箱里 `ps`/`top` 常不可用，这里直接读 libproc）：
-
-```bash
-pgrep -x SafeKeys                     # 拿到 PID
-scripts/proc_rss.py <PID>             # 单次快照
-scripts/proc_rss.py <PID> --watch 30  # 观察 30 秒，报告内存增量与每秒唤醒次数
+```
+物理按键 → HID 驱动 → 【SafeKeys 的 Event Tap】→ WindowServer → 前台 App
+                             ↑
+                    回调返回 nil = 事件被丢弃
 ```
 
----
+之所以必须选 HID 层（`kCGHIDEventTap`）而不是更浅的 session 层，是因为
+**只有 HID 层能拦住 Cmd+Tab、Ctrl+Cmd+Q 这类系统级快捷键**，session tap 拦不住。
 
-## 已知限制
+此外还要单独监听 `NX_SYSDEFINED`（事件类型 14）—— F1–F12 的亮度、音量、播放键
+走的是这条系统自定义通道，不纳入掩码就会整组漏掉。
 
-- Touch ID 按钮和电源键无法拦截，但它们只在登录/授权弹窗里起作用，不影响清洁过程
-- 触控板和鼠标不锁（安全设计，不是偷工减料）
-- 本地 ad-hoc 签名：不能公证的系统更新提示、重装系统后需重新授权
+**Tap 只在锁定期间创建，解锁即销毁。** 不锁键盘时它完全不碰你的任何按键。
+
+### 为什么不会被绕过
+
+| 保障层 | 内容 |
+|---|---|
+| 1 | **tap 是进程资源** —— 进程一旦消亡，内核必然回收，键盘必然恢复。这是操作系统层面的保证，不是约定 |
+| 2 | `atexit` + SIGINT / SIGTERM 处理函数，覆盖所有退出路径 |
+| 3 | **独立看门狗线程**：主线程 3 秒无心跳，立即释放 tap 并退出。它不依赖 RunLoop，专门应对"进程活着但主线程卡死"这种唯一真正收不了场的场景 |
+| 4 | 权限被撤销、系统睡眠、锁屏、用户切换 → 自动解锁 |
+| 5 | 10 分钟强制解锁硬上限 |
+
+理论上不存在锁死的可能 —— 磁盘上的 App 还在，键盘也一定还能用。
+
+### 为什么不会误解锁
+
+擦键盘时手指会不规则地蹭过很多键，早期版本因此容易被"误碰"解锁。现在口令要同时满足：
+
+| 约束 | 挡住什么 |
+|---|---|
+| 必须是**多个**按键 | 单个键被蹭到 |
+| 相邻间隔 0.1–0.8 秒 | 抹布划过去的连击 |
+| 中途碰到任何其他键就重来 | 擦洗时总有好几个键一起被蹭到 |
+| 按住不放的 autorepeat 不计，且直接打断序列 | 手压在某个键上不动 |
+| 锁定后 2 秒冷却期 | 刚点完锁定、手还没离开键盘那一下 |
+
+> 顺带修过一个真实缺陷：按住 Esc 不放时系统会连续上报 autorepeat 事件，
+> 旧逻辑把它算成多次按下 —— 等于**压住 Esc 一下就解锁了**。现在 autorepeat 不计且会打断序列。
+
+### 空闲时的开销
+
+App 只在**你主动锁定**时才干活。日常打开放着时：
+
+- 物理内存约 **27 MB**，长时间观察无增长
+- RunLoop 唤醒约 **4 次/秒**（状态轮询 + 看门狗心跳）
+- 关闭窗口即退出进程，不留任何后台驻留项
+
+想自己复核可用随包脚本（某些受限环境里 `ps` / `top` 不可用，脚本直接读 libproc）：
+
+```bash
+scripts/proc_rss.py <PID>              # 单次快照
+scripts/proc_rss.py <PID> --watch 30   # 观察 30 秒，报告内存增量与唤醒频率
+```
 
 ---
 
 ## 卸载
 
-一条命令，或者双击 dist 目录里的 **卸载 SafeKeys.command**：
+**方式一：脚本（推荐）**
 
 ```bash
 ./scripts/uninstall.sh            # 会先列出待删清单让你确认
-./scripts/uninstall.sh --yes      # 跳过确认直接删
+./scripts/uninstall.sh --yes      # 跳过确认
 ```
 
-它会按顺序做四件事：
+或者在 `dist/` 目录里双击 **卸载 SafeKeys.command**。
 
-1. **先让运行中的实例优雅退出** —— 这一步同时保证键盘解锁，不会出现"卸载完键盘还锁着"
-2. **删配置与缓存**：UserDefaults、Application Support、Caches、HTTPStorages、Saved Application State
-3. **删隐私授权记录**：辅助功能 / 输入监控里的 SafeKeys 条目一并抹掉（这一步最容易被人忘，
-   导致卸载几个月后系统设置里还挂着一条幽灵条目）
-4. **删 App 本体**（自动查找 `/Applications`、`~/Applications`、`dist/` 三个位置，
-   也可手动追加路径：`./scripts/uninstall.sh /path/to/SafeKeys.app`）
+它依序完成四件事，并逐项复验：
 
-最后会逐项校验残留清单，全部清空才返回 ✅。清理路径是固定白名单，不做任何通配扫描。
+1. 让运行中的实例优雅退出 —— 保证不会出现"卸载完键盘还锁着"
+2. 删除配置与缓存：UserDefaults、Application Support、Caches、HTTPStorages、
+   Saved Application State、Logs
+3. 清除**隐私授权记录**（辅助功能 / 输入监控）—— 这一步最容易被人忘，
+   通常卸载几个月后系统设置里还挂着一条灰掉的幽灵条目
+4. 删除 App 本体，自动查找 `/Applications`、`~/Applications`、`dist/` 三个位置
 
-**唯一需要手动的一件事**：如果你把图标拖过 Dock 或 Launchpad，把它手动拖出去即可 ——
+清理路径是写死的白名单，**不做任何通配扫描**。
+
+**方式二：App 自带清理**（脚本弄丢时用它）
+
+```bash
+/Applications/SafeKeys.app/Contents/MacOS/SafeKeys --uninstall
+rm -rf /Applications/SafeKeys.app
+```
+
+**唯一需要手动的一步**：如果你把图标拖过 Dock 或 Launchpad，把它拖出去即可 ——
 macOS 不允许第三方脚本改动 Dock 布局。
 
-> App 自身也带同一套清理能力，即使脚本弄丢了也能用（作为备用方案）：
-> `/Applications/SafeKeys.app/Contents/MacOS/SafeKeys --uninstall`
+> `tccutil` 清除授权时若返回 `Operation not permitted`，给终端授予
+> 「完全磁盘访问权限」后重跑一次。脚本会如实报告清除失败，不会假装成功。
 
 ---
 
-## 命令行辅助
+## 从源码构建
+
+### 环境要求
+
+- macOS 13+
+- **仅需 Xcode Command Line Tools**（无需完整 Xcode）
 
 ```bash
+xcode-select --install
+```
+
+### 构建
+
 ```bash
-# 验证解锁口令引擎的判定是否正确（不需要任何权限，纯逻辑断言）
-/Applications/SafeKeys.app/Contents/MacOS/SafeKeys --selftest
+git clone https://github.com/Nothings2Seeyeyeye/SafeKeys.git
+cd SafeKeys
+./scripts/build-app.sh
+```
 
-# 重置辅助功能授权（授权状态混乱时用，之后重启 app 重新勾选）
-tccutil reset Accessibility cn.open-book.SafeKeys
+产物在 `dist/SafeKeys.app`。若要重新分发 zip：
 
-# 查看当前设置的锁定时长（秒，0 = 不限时）
-defaults read cn.open-book.SafeKeys SafeKeys.lockDurationSeconds
+```bash
+ditto -c -k --keepParent dist/SafeKeys.app dist/SafeKeys.zip
+```
 
-# 如果你的 Mac 上 Cmd+Tab 没被拦住，切到 session 层级试试（然后重启 app）
-defaults write cn.open-book.SafeKeys SafeKeys.tapLocation -bool false
+### 自检
+
+```bash
+dist/SafeKeys.app/Contents/MacOS/SafeKeys --selftest
+```
+
+19 条纯逻辑断言，覆盖四种口令模式、间隔边界、autorepeat、冷却期、修饰键打断，
+以及菜单栏快捷键绑定（Cmd+Q / Cmd+W）—— 不依赖任何系统权限，可放进 CI。
+
+### 重新生成图标
+
+```bash
+# 1. AI 生成 1024×1024 源图后抠掉白底（生成模型的「透明背景」常常是假的纯白）
+scripts/remove_white_bg.py <源图.png> icon_transparent.png
+
+# 2. 按 macOS 网格规范排版：大尺寸图形占画布 80.5%，小尺寸 90%
+scripts/make-iconset.py icon_transparent.png AppIcon.iconset
+
+# 3. 合成 icns
+iconutil -c icns AppIcon.iconset -o Resources/icon/AppIcon.icns
 ```
 
 ---
 
-## 重新构建
+## 常见问题
 
-改完代码后执行 `./scripts/build-app.sh`，会原地覆盖 `dist/SafeKeys.app`。
+| 问题 | 解决 |
+|---|---|
+| **Cmd+Q 没反应** | v1.1.3 之前的版本缺少主菜单栏。更新到最新版 |
+| 提示"无法验证开发者" | `xattr -dr com.apple.quarantine /Applications/SafeKeys.app` |
+| 授权了但按钮仍不可用 | **完全退出再重开**（TCC 权限下次启动才生效） |
+| 移动 App 后授权失效 | App 不要移动；重装后重新勾选即可 |
+| 锁定按钮是灰的 | 尚无辅助功能权限，见[授权一节](#首次运行授权辅助功能) |
+| Cmd+Tab 没被拦住 | 试切到 session tap：`defaults write cn.open-book.SafeKeys SafeKeys.tapLocation -bool false` |
+| 忘了怎么解锁 | 口令印在浮层上；或者 `pkill -x SafeKeys` |
+| 浮层挡住解锁按钮 | 浮层层级高于所有窗口，不会被盖住；此时用口令或 `pkill` |
+| App 卡死不动 | 看门狗 3 秒后自行释放并退出；也可直接 `pkill -x SafeKeys` |
 
-重新签名后 macOS 有时认不出这是同一个程序，表现为"已经勾了辅助功能但还是拦不住"。
-这时重置一次授权再重新勾选即可：
+### 已知限制
 
-```bash
-tccutil reset Accessibility cn.open-book.SafeKeys
+- Touch ID 与电源键无法拦截，但它们只在登录/授权弹窗中起作用
+- 触控板和鼠标不锁（安全设计）
+- ad-hoc 自签名：不能公证的系统更新提示，重装系统后需重新授权
+
+---
+
+## 项目结构
+
 ```
+SafeKeys/
+├── Package.swift                  # SwiftPM 清单（无 Xcode 工程）
+├── Resources/
+│   ├── Info.plist
+│   └── icon/                      # 图标源图与 icns
+├── Sources/SafeKeys/
+│   ├── main.swift                 # 入口、atexit 与信号处理兜底
+│   ├── Menus.swift                # 主菜单栏（Cmd+Q 等快捷键的绑定来源）
+│   ├── AppDelegate.swift          # 窗口生命周期、关窗即退出
+│   ├── KeyBlocker.swift           # CGEventTap 安装/释放、事件分类
+│   ├── UnlockPhraseMatcher.swift  # 口令判定（纯逻辑，可自检）
+│   ├── LockManager.swift          # 锁定/解锁状态机
+│   ├── OverlayWindow.swift        # 全屏浮层
+│   ├── HoldToUnlockButton.swift   # 按住才生效的解锁按钮
+│   ├── Watchdog.swift             # 主线程心跳监护
+│   ├── Permissions.swift          # 辅助功能权限查询
+│   ├── Selftest.swift             # 命令行自检
+│   ├── Settings.swift             # 用户偏好与口令定义
+│   └── Uninstaller.swift          # 自我清理
+├── scripts/
+│   ├── build-app.sh               # 编译 + 组装 bundle + ad-hoc 签名
+│   ├── uninstall.sh               # 彻底卸载
+│   ├── remove_white_bg.py         # 图标去白底
+│   ├── make-iconset.py            # 图标排版
+│   └── proc_rss.py                # 进程内存/唤醒测量
+└── docs/PROPOSAL.md               # 设计调研与方案
+```
+
+---
+
+## 许可
+
+MIT License。自签名未公证，仅供自用。
