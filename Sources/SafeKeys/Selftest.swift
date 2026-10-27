@@ -119,7 +119,8 @@ enum Selftest {
     private static func mainMenuShortcuts(_ failures: inout [String]) {
         print("菜单栏快捷键")
 
-        let items = flatten(MainMenuBuilder.build())
+        let main = MainMenuBuilder.build()
+        let items = flatten(main)
 
         let quit = items.first { $0.keyEquivalent == "q" }
         expect(
@@ -134,6 +135,21 @@ enum Selftest {
             tag("Cmd+W 绑定到 performClose:"),
             true,
             close?.action == #selector(NSWindow.performClose(_:)),
+            &failures
+        )
+
+        // 应用菜单若没有自己的 title，菜单栏第一格会显示成空白
+        expect(
+            tag("应用菜单有标题"),
+            true,
+            !(main.item(at: 0)?.submenu?.title ?? "").isEmpty,
+            &failures
+        )
+
+        expect(
+            tag("存在「关于」菜单项"),
+            true,
+            items.contains { $0.title.hasPrefix("关于") && $0.action == #selector(AppDelegate.showAbout(_:)) },
             &failures
         )
     }

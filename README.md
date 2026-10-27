@@ -134,6 +134,8 @@ tccutil reset Accessibility cn.open-book.SafeKeys
 | Cmd+M | 最小化 |
 | Cmd+C / Cmd+V | 复制粘贴 |
 
+点菜单栏 **SafeKeys → 关于 SafeKeys** 可查看版本信息、解锁通道速查和卸载命令入口。
+
 ### 四种解锁方式
 
 任选其一即可：
@@ -280,8 +282,9 @@ ditto -c -k --keepParent dist/SafeKeys.app dist/SafeKeys.zip
 dist/SafeKeys.app/Contents/MacOS/SafeKeys --selftest
 ```
 
-19 条纯逻辑断言，覆盖四种口令模式、间隔边界、autorepeat、冷却期、修饰键打断，
-以及菜单栏快捷键绑定（Cmd+Q / Cmd+W）—— 不依赖任何系统权限，可放进 CI。
+21 条纯逻辑断言，覆盖四种口令模式、间隔边界、autorepeat、冷却期、修饰键打断，
+以及菜单栏完整性（Cmd+Q / Cmd+W 绑定、应用菜单标题、「关于」项是否存在）——
+不依赖任何系统权限，可放进 CI。
 
 ### 重新生成图标
 
@@ -331,6 +334,7 @@ SafeKeys/
 ├── Sources/SafeKeys/
 │   ├── main.swift                 # 入口、atexit 与信号处理兜底
 │   ├── Menus.swift                # 主菜单栏（Cmd+Q 等快捷键的绑定来源）
+│   ├── AboutPanel.swift           # 「关于」面板
 │   ├── AppDelegate.swift          # 窗口生命周期、关窗即退出
 │   ├── KeyBlocker.swift           # CGEventTap 安装/释放、事件分类
 │   ├── UnlockPhraseMatcher.swift  # 口令判定（纯逻辑，可自检）

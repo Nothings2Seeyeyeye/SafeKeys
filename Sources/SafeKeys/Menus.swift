@@ -42,6 +42,15 @@ enum MainMenuBuilder {
     private static func appMenu() -> NSMenu {
         let menu = NSMenu()
         let name = ProcessInfo.processInfo.processName
+        // 菜单栏第一个条目显示的是**子菜单自己的 title**，光给 NSMenuItem 设 title 不够，
+        // 不设这里就会出现一块空白菜单标题。
+        menu.title = name
+        menu.addItem(NSMenuItem(
+            title: "关于 \(name)",
+            action: #selector(AppDelegate.showAbout(_:)),
+            keyEquivalent: ""
+        ))
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(
             title: "退出 \(name)",
             action: #selector(NSApplication.terminate(_:)),

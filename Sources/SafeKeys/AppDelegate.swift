@@ -59,6 +59,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    // MARK: - 关于面板
+
+    /// 菜单栏「关于 SafeKeys」的入口。
+    /// 这里不写 target：菜单项顺着 responder chain 找到 AppDelegate 来响应。
+    @objc func showAbout(_ sender: Any?) {
+        AboutPanel.show()
+    }
+
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         // 绝不允许"窗口关了但键盘还锁着"
         if LockManager.shared.phase == .locked {
@@ -68,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // 只处理主窗口；关于面板另外管理，关它不该连带把 App 退掉。
+        guard let window = notification.object as? NSWindow, window === mainWindow else { return }
         // 不等 AppKit 的隐式策略，窗口一关自己走退出流程。
         //
         // applicationShouldTerminateAfterLastWindowClosed = true 已经足够表达意图，
